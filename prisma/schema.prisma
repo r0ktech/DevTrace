@@ -1,0 +1,270 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── NextAuth Models ────────────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  githubProfile GitHubProfile?
+  repositories  Repository[]
+  commits       Commit[]
+  pullRequests  PullRequest[]
+  issues        Issue[]
+  syncJobs      SyncJob[]
+  preferences   UserPreference?
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── GitHub Profile ─────────────────────────────────────────────────
+
+model GitHubProfile {
+  id          String  @id @default(cuid())
+  userId      String  @unique
+  githubId    Int     @unique
+  login       String  @unique
+  avatarUrl   String?
+  bio         String?
+  company     String?
+  location    String?
+  blog        String?
+  publicRepos Int     @default(0)
+  followers   Int     @default(0)
+  following   Int     @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("github_profiles")
+}
+
+// ─── Repository ─────────────────────────────────────────────────────
+
+model Repository {
+  id            String    @id @default(cuid())
+  userId        String
+  githubId      Int
+  name          String
+  fullName      String
+  description   String?   @db.Text
+  language      String?
+  stars         Int       @default(0)
+  forks         Int       @default(0)
+  openIssues    Int       @default(0)
+  size          Int       @default(0)
+  visibility    String    @default("public")
+  isArchived    Boolean   @default(false)
+  isFork        Boolean   @default(false)
+  defaultBranch String    @default("main")
+  htmlUrl       String?
+  createdAt     DateTime  @default(now())
+  pushedAt      DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commits       Commit[]
+  pullRequests  PullRequest[]
+  issues        Issue[]
+  languageStats LanguageStat[]
+
+  @@unique([userId, githubId])
+  @@index([userId])
+  @@index([userId, language])
+  @@index([pushedAt])
+  @@map("repositories")
+}
+
+// ─── Commit ─────────────────────────────────────────────────────────
+
+model Commit {
+  id            String   @id @default(cuid())
+  userId        String
+  repositoryId  String
+  sha           String
+  message       String   @db.Text
+  authorName    String?
+  authorEmail   String?
+  additions     Int      @default(0)
+  deletions     Int      @default(0)
+  committedAt   DateTime
+  htmlUrl       String?
+  createdAt     DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sha])
+  @@index([userId])
+  @@index([repositoryId])
+  @@index([committedAt])
+  @@index([userId, committedAt])
+  @@map("commits")
+}
+
+// ─── Pull Request ───────────────────────────────────────────────────
+
+model PullRequest {
+  id            String    @id @default(cuid())
+  userId        String
+  repositoryId  String
+  githubId      Int
+  number        Int
+  title         String
+  state         String
+  additions     Int       @default(0)
+  deletions     Int       @default(0)
+  changedFiles  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  mergedAt      DateTime?
+  closedAt      DateTime?
+  updatedAt     DateTime  @updatedAt
+  htmlUrl       String?
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, repositoryId, number])
+  @@index([userId])
+  @@index([repositoryId])
+  @@index([state])
+  @@index([userId, createdAt])
+  @@map("pull_requests")
+}
+
+// ─── Issue ──────────────────────────────────────────────────────────
+
+model Issue {
+  id            String    @id @default(cuid())
+  userId        String
+  repositoryId  String
+  githubId      Int
+  number        Int
+  title         String
+  state         String
+  labels        String[]
+  createdAt     DateTime  @default(now())
+  closedAt      DateTime?
+  updatedAt     DateTime  @updatedAt
+  htmlUrl       String?
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, repositoryId, number])
+  @@index([userId])
+  @@index([repositoryId])
+  @@index([state])
+  @@index([userId, createdAt])
+  @@map("issues")
+}
+
+// ─── Language Stats ─────────────────────────────────────────────────
+
+model LanguageStat {
+  id            String @id @default(cuid())
+  repositoryId  String
+  language      String
+  bytes         Int    @default(0)
+  percentage    Float  @default(0)
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, language])
+  @@index([repositoryId])
+  @@index([language])
+  @@map("language_stats")
+}
+
+// ─── Sync Job ───────────────────────────────────────────────────────
+
+model SyncJob {
+  id                String    @id @default(cuid())
+  userId            String
+  status            String    @default("pending") // pending, running, completed, failed
+  stage             String?   // repositories, commits, pull_requests, issues, languages
+  repositoriesSynced Int      @default(0)
+  commitsSynced     Int       @default(0)
+  prsSynced         Int       @default(0)
+  issuesSynced      Int       @default(0)
+  error             String?   @db.Text
+  startedAt         DateTime  @default(now())
+  completedAt       DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, status])
+  @@map("sync_jobs")
+}
+
+// ─── User Preferences ──────────────────────────────────────────────
+
+model UserPreference {
+  id                  String  @id @default(cuid())
+  userId              String  @unique
+  theme               String  @default("system") // light, dark, system
+  defaultDateRange    String  @default("30d")
+  publicProfile       Boolean @default(false)
+  activityVisibility  String  @default("private") // public, private
+  repoVisibility      String  @default("private") // public, private
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_preferences")
+}
