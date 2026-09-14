@@ -1,7 +1,7 @@
-import NextAuth from 'next-auth';
-import GitHubProvider from 'next-auth/providers/github';
-import { PrismaAdapter } from '@auth/prisma-adapter';
-import prisma from '@/lib/db';
+import NextAuth from "next-auth";
+import GitHubProvider from "next-auth/providers/github";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import prisma from "@/lib/db";
 
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
@@ -11,7 +11,7 @@ export const authOptions = {
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
       authorization: {
         params: {
-          scope: 'read:user user:email repo read:org',
+          scope: "read:user user:email repo read:org",
         },
       },
     }),
@@ -25,13 +25,13 @@ export const authOptions = {
     },
     async signIn({ account, profile }) {
       // Store the GitHub profile after sign-in
-      if (account?.provider === 'github' && profile) {
+      if (account?.provider === "github" && profile) {
         try {
           const user = await prisma.user.findFirst({
             where: {
               accounts: {
                 some: {
-                  provider: 'github',
+                  provider: "github",
                   providerAccountId: String(profile.id),
                 },
               },
@@ -68,18 +68,18 @@ export const authOptions = {
             });
           }
         } catch (error) {
-          console.error('Failed to upsert GitHub profile on sign-in:', error);
+          console.error("Failed to upsert GitHub profile on sign-in:", error);
         }
       }
       return true;
     },
   },
   pages: {
-    signIn: '/',
-    error: '/auth/error',
+    signIn: "/",
+    error: "/auth/error",
   },
   session: {
-    strategy: 'database',
+    strategy: "database",
   },
   secret: process.env.NEXTAUTH_SECRET,
 };
@@ -91,7 +91,7 @@ export default NextAuth(authOptions);
  * @returns {Promise<{user: {id: string, name: string, email: string, image: string}} | null>}
  */
 export async function getServerSession() {
-  const { getServerSession: getSession } = await import('next-auth');
+  const { getServerSession: getSession } = await import("next-auth");
   return getSession(authOptions);
 }
 
@@ -105,7 +105,7 @@ export async function getAccessToken(userId) {
   const account = await prisma.account.findFirst({
     where: {
       userId,
-      provider: 'github',
+      provider: "github",
     },
     select: {
       access_token: true,
