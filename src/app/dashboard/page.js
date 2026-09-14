@@ -1,11 +1,5 @@
 import Link from "next/link";
-import {
-  ArrowUpRight,
-  GitBranch,
-  GitCommitVertical,
-  Sprout,
-  TrendingUp,
-} from "lucide-react";
+import { ArrowUpRight, GitBranch } from "lucide-react";
 import { DevTraceShell, MetricCard } from "@/components/devtrace-shell";
 import {
   demoActivity,
@@ -14,8 +8,121 @@ import {
   demoRepositories,
   demoInsights,
 } from "@/lib/demo-data";
+import { getServerSession } from "@/lib/auth";
+import prisma from "@/lib/db";
+import {
+  getDashboardMetrics,
+  getActivityOverTime,
+  getTopRepositories,
+} from "@/lib/analytics/metrics";
 
-export default function DashboardPage() {
+function toChartData(stream) {
+  if (
+    !stream ||
+    (!stream.commits?.length &&
+      !stream.pullRequests?.length &&
+      !stream.issues?.length)
+  ) {
+    return demoActivity;
+  }
+
+  const commitMap = new Map(
+    (stream.commits || []).map((item) => [
+      new Date(item.date).toISOString().slice(0, 10),
+      Number(item.count) || 0,
+    ]),
+  );
+  const prMap = new Map(
+    (stream.pullRequests || []).map((item) => [
+      new Date(item.date).toISOString().slice(0, 10),
+      Number(item.count) || 0,
+    ]),
+  );
+  const issueMap = new Map(
+    (stream.issues || []).map((item) => [
+      new Date(item.date).toISOString().slice(0, 10),
+      Number(item.count) || 0,
+    ]),
+  );
+
+  const labels = Array.from(
+    new Set([...commitMap.keys(), ...prMap.keys(), ...issueMap.keys()]),
+  ).sort();
+
+  return labels.slice(-7).map((key) => {
+    const date = new Date(`${key}T00:00:00Z`);
+    return {
+      label: date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      }),
+      commits: commitMap.get(key) || 0,
+      prs: prMap.get(key) || 0,
+      issues: issueMap.get(key) || 0,
+    };
+  });
+}
+
+export default async function DashboardPage() {
+  const session = await getServerSession();
+  const hasLiveSession = Boolean(session?.user?.id);
+
+  const liveProfile = hasLiveSession
+    ? await prisma.gitHubProfile.findUnique({
+        where: { userId: session.user.id },
+      })
+    : null;
+  const liveMetrics = hasLiveSession
+    ? await getDashboardMetrics(session.user.id)
+    : null;
+  const liveActivity = hasLiveSession
+    ? await getActivityOverTime(session.user.id, "week", 30)
+    : null;
+  const liveTopRepos = hasLiveSession
+    ? await getTopRepositories(session.user.id, 5)
+    : null;
+
+  const profile = liveProfile
+    ? {
+        name: liveProfile.login || session.user.name || "Developer",
+        username: liveProfile.login || "developer",
+        avatar:
+          liveProfile.avatarUrl || session.user.image || demoProfile.avatar,
+        githubUrl: `https://github.com/${liveProfile.login}`,
+      }
+    : demoProfile;
+
+  const metrics = liveMetrics
+    ? {
+        contributions: liveMetrics.metrics.contributions,
+        commits: liveMetrics.metrics.commits,
+        pullRequests: liveMetrics.metrics.pullRequests,
+        issues: liveMetrics.metrics.issues,
+        repositories: liveMetrics.metrics.repositories,
+      }
+    : demoMetrics;
+
+  const activity = toChartData(liveActivity);
+  const repos =
+    liveTopRepos && liveTopRepos.length > 0
+      ? liveTopRepos.map((repo) => ({
+          name: repo.name,
+          description: repo.description || "Repository activity",
+          language: repo.language || "Unknown",
+          stars: Number(repo.stars) || 0,
+          forks: Number(repo.forks) || 0,
+          commits: Number(repo.commit_count) || 0,
+        }))
+      : demoRepositories;
+
+  const insights = liveMetrics
+    ? [
+        `You have ${metrics.repositories} active repositories and ${metrics.commits} recorded commits in your tracked history.`,
+        `${metrics.pullRequests} pull requests are represented in the synced activity stream, which makes the review cadence easy to compare over time.`,
+        `${metrics.issues} issues are connected to your GitHub history, allowing the platform to measure the rhythm of your work by project and time window.`,
+      ]
+    : demoInsights;
+
   return (
     <DevTraceShell
       title="Overview"
@@ -26,19 +133,19 @@ export default function DashboardPage() {
         <div className="flex flex-col gap-4 rounded-2xl border border-[var(--card-border)] bg-[var(--panel)] p-5 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
             <img
-              src={demoProfile.avatar}
-              alt={demoProfile.username}
+              src={profile.avatar}
+              alt={profile.username}
               className="h-14 w-14 rounded-full border border-[var(--card-border)]"
             />
             <div>
               <div className="text-2xl font-semibold tracking-[-0.06em]">
-                {demoProfile.name}
+                {profile.name}
               </div>
               <div className="mt-1 flex items-center gap-2 text-sm text-[var(--muted-foreground)]">
-                <span>@{demoProfile.username}</span>
+                <span>@{profile.username}</span>
                 <span>•</span>
                 <a
-                  href={demoProfile.githubUrl}
+                  href={profile.githubUrl}
                   className="inline-flex items-center gap-1 text-[var(--foreground)]"
                 >
                   GitHub <ArrowUpRight className="h-3.5 w-3.5" />
@@ -65,7 +172,7 @@ export default function DashboardPage() {
                 Status
               </div>
               <div className="mt-1 font-medium text-emerald-700 dark:text-emerald-300">
-                Active
+                {hasLiveSession ? "Synced" : "Demo"}
               </div>
             </div>
           </div>
@@ -74,29 +181,29 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <MetricCard
             label="Contributions"
-            value={demoMetrics.contributions}
+            value={metrics.contributions}
             hint="Last 90 days"
             accent="success"
           />
           <MetricCard
             label="Commits"
-            value={demoMetrics.commits}
+            value={metrics.commits}
             hint="Current cycle"
             accent="warning"
           />
           <MetricCard
             label="PRs"
-            value={demoMetrics.pullRequests}
+            value={metrics.pullRequests}
             hint="Opened and merged"
           />
           <MetricCard
             label="Issues"
-            value={demoMetrics.issues}
+            value={metrics.issues}
             hint="Closed + open"
           />
           <MetricCard
             label="Repos"
-            value={demoMetrics.repositories}
+            value={metrics.repositories}
             hint="Active projects"
           />
         </div>
@@ -113,12 +220,12 @@ export default function DashboardPage() {
                 </div>
               </div>
               <div className="rounded-md border border-[var(--card-border)] bg-[var(--card)] px-2 py-1 text-xs text-[var(--muted-foreground)]">
-                90 days
+                30 days
               </div>
             </div>
 
             <div className="flex h-52 items-end gap-3">
-              {demoActivity.map((day) => (
+              {activity.map((day) => (
                 <div
                   key={day.label}
                   className="flex flex-1 flex-col items-center justify-end gap-2"
@@ -126,15 +233,15 @@ export default function DashboardPage() {
                   <div className="flex h-40 w-full items-end justify-center gap-1">
                     <div
                       className="w-1/3 rounded-t-md bg-[var(--foreground)]/80"
-                      style={{ height: `${day.commits * 2.5}px` }}
+                      style={{ height: `${Math.max(day.commits * 10, 8)}px` }}
                     />
                     <div
                       className="w-1/3 rounded-t-md bg-[var(--foreground)]/35"
-                      style={{ height: `${day.prs * 22}px` }}
+                      style={{ height: `${Math.max(day.prs * 16, 8)}px` }}
                     />
                     <div
                       className="w-1/3 rounded-t-md bg-[var(--foreground)]/15"
-                      style={{ height: `${day.issues * 20}px` }}
+                      style={{ height: `${Math.max(day.issues * 18, 8)}px` }}
                     />
                   </div>
                   <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--muted-foreground)]">
@@ -156,7 +263,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-3">
-              {demoInsights.map((insight, index) => (
+              {insights.map((insight, index) => (
                 <div
                   key={index}
                   className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-3 text-sm leading-6 text-[var(--muted-foreground)]"
@@ -185,7 +292,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="space-y-3">
-            {demoRepositories.map((repo) => (
+            {repos.map((repo) => (
               <div
                 key={repo.name}
                 className="flex flex-col gap-3 rounded-xl border border-[var(--card-border)] bg-[var(--card)] p-4 md:flex-row md:items-center md:justify-between"

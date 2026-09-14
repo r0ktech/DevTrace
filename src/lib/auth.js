@@ -3,6 +3,8 @@ import GitHubProvider from "next-auth/providers/github";
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
 import prisma from "@/lib/db";
 
+const authSecret = process.env.NEXTAUTH_SECRET || "devtrace-local-secret";
+
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
   providers: [
@@ -81,7 +83,8 @@ export const authOptions = {
   session: {
     strategy: "database",
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: authSecret,
+  trustHost: true,
 };
 
 export default NextAuth(authOptions);
