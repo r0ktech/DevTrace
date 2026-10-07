@@ -197,3 +197,10 @@
     forced-color-adjust: none;
   }
 }
+
+/* On phones the metric strip is two columns; an odd last metric spans both */
+@media (max-width: 639px) {
+  .metric-strip > :last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+}

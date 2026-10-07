@@ -6,7 +6,7 @@ import { formatSignedPercent, percentChangeOrNull } from "./metric-utils";
  */
 export function MetricStrip({ children, className }) {
   return (
-    <dl className={cn("grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-3 lg:grid-cols-5", className)}>
+    <dl className={cn("metric-strip grid grid-cols-2 overflow-hidden rounded-md border border-border bg-surface sm:grid-cols-3 lg:grid-cols-5", className)}>
       {children}
     </dl>
   );
