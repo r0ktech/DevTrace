@@ -1,62 +1,51 @@
-import { NextResponse } from 'next/server';
-import { getServerSession, getAccessToken } from '@/lib/auth';
-import { runSync } from '@/lib/github/sync';
-import prisma from '@/lib/db';
+import prisma from "@/server/db";
+import { apiHandler, jsonError } from "@/server/http";
+import { enqueueSync, getLastCompletedSync, serializeJob } from "@/server/sync/jobs";
+import { retryIfRateLimitExpired, startSyncInBackground } from "@/server/sync/run";
+import { describeSyncError } from "@/lib/sync-stages";
 
-export async function POST() {
-  try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+// Background refresh when the newest data is older than this
+const AUTO_SYNC_AFTER_MS = 12 * 60 * 60_000;
 
-    const accessToken = await getAccessToken(session.user.id);
-    if (!accessToken) {
-      return NextResponse.json(
-        { error: 'GitHub account not connected. Please reconnect.' },
-        { status: 400 }
-      );
-    }
-
-    // Start sync in background — don't await
-    runSync(session.user.id, accessToken).catch((error) => {
-      console.error('Sync failed:', error);
-    });
-
-    // Return immediately with the sync job
-    const syncJob = await prisma.syncJob.findFirst({
-      where: { userId: session.user.id, status: 'running' },
-      orderBy: { startedAt: 'desc' },
-    });
-
-    return NextResponse.json({ syncJob });
-  } catch (error) {
-    console.error('Sync trigger error:', error);
-    return NextResponse.json(
-      { error: 'Failed to start synchronization.' },
-      { status: 500 }
-    );
-  }
+function present(job, lastCompleted) {
+  const serialized = serializeJob(job);
+  return {
+    job: serialized && {
+      ...serialized,
+      // errorMessage is the raw internal message; show the user-facing one
+      errorMessage: serialized.status === "failed" ? describeSyncError(serialized.errorCode, null) : null,
+    },
+    lastSyncedAt: lastCompleted?.finishedAt || null,
+  };
 }
 
-export async function GET() {
-  try {
-    const session = await getServerSession();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+// GET /api/sync — latest job status (polled by the sync screen)
+export const GET = apiHandler(async ({ user }) => {
+  const job = user.isDemo ? null : await retryIfRateLimitExpired(user.id);
+  const latest = job || (await getLastCompletedSync(user.id));
+  return present(latest, await getLastCompletedSync(user.id));
+}, { limit: { limit: 120, windowSeconds: 60 }, name: "sync-status" });
+
+// POST /api/sync — start a sync. Body { auto: true } only syncs when stale.
+export const POST = apiHandler(
+  async ({ user, request }) => {
+    const body = await request.json().catch(() => ({}));
+    const lastCompleted = await getLastCompletedSync(user.id);
+
+    if (body?.auto) {
+      const fresh = lastCompleted && Date.now() - lastCompleted.finishedAt.getTime() < AUTO_SYNC_AFTER_MS;
+      if (fresh) return present(lastCompleted, lastCompleted);
     }
 
-    const syncJob = await prisma.syncJob.findFirst({
-      where: { userId: session.user.id },
-      orderBy: { startedAt: 'desc' },
-    });
+    const linked = await prisma.account.count({ where: { userId: user.id, provider: "github" } });
+    if (!linked) {
+      return jsonError(409, "NO_GITHUB", "Connect GitHub before syncing.");
+    }
 
-    return NextResponse.json({ syncJob });
-  } catch (error) {
-    console.error('Sync status error:', error);
-    return NextResponse.json(
-      { error: 'Failed to get sync status.' },
-      { status: 500 }
-    );
-  }
-}
+    const { job, created } = await enqueueSync(user.id, { trigger: lastCompleted ? "manual" : "initial" });
+    if (created) startSyncInBackground(job.id);
+    return Response.json(present(job, lastCompleted), { status: created ? 202 : 200 });
+  },
+  { mutation: true, demoAllowed: false, limit: { limit: 6, windowSeconds: 60 }, name: "sync" },
+);
+
