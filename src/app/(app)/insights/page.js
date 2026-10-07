@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/ui/states";
 import { SegmentedLinks } from "@/components/ui/segmented";
 import { WeeklySummaryPanel } from "@/components/app/weekly-summary";
 import { aiSummaryEnabled, getLatestSummary } from "@/server/ai/weekly-summary";
+import { cachedForUser } from "@/server/cache";
 
 export const metadata = { title: "Insights" };
 
@@ -30,8 +31,8 @@ export default async function InsightsPage({ searchParams }) {
   const recapDays = params.recap === "30" ? 30 : 7;
 
   const [{ insights }, recap, summary] = await Promise.all([
-    getInsights(user.id, { tz }),
-    getRecap(user.id, { days: recapDays, tz }),
+    cachedForUser(user.id, `insights:${tz}`, () => getInsights(user.id, { tz }), 600),
+    cachedForUser(user.id, `recap:${recapDays}:${tz}`, () => getRecap(user.id, { days: recapDays, tz })),
     getLatestSummary(user.id),
   ]);
   const ready = insights.filter((i) => i.status === "ok");

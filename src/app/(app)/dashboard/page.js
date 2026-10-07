@@ -4,6 +4,7 @@ import { getPageContext } from "@/server/page-context";
 import { getOverviewMetrics, getTopRepositories } from "@/server/analytics/overview";
 import { getActivitySeries, getEvents, getHeatmap } from "@/server/analytics/activity";
 import { getLanguageBreakdown } from "@/server/analytics/languages";
+import { cachedForUser } from "@/server/cache";
 import { HEATMAP_PERIODS } from "@/lib/dates";
 import { formatNumber, formatPercent, formatRelative, pluralize } from "@/lib/format";
 import { PageHeader } from "@/components/ui/page-header";
@@ -26,14 +27,20 @@ export default async function OverviewPage({ searchParams }) {
   const { user, prefs, tz, range } = await getPageContext(params);
   const heatmapPeriod = HEATMAP_PERIODS[params.heatmap] ? params.heatmap : "1y";
 
-  const [metrics, series, heatmap, topRepos, events, languages] = await Promise.all([
-    getOverviewMetrics(user.id, { range, tz }),
-    getActivitySeries(user.id, { range, tz }),
-    getHeatmap(user.id, { period: heatmapPeriod, tz }),
-    getTopRepositories(user.id, { range, tz, limit: 6 }),
-    getEvents(user.id, { limit: 8 }),
-    getLanguageBreakdown(user.id, { scope: prefs.defaultRepoScope }),
-  ]);
+  // Cached per user; the cache generation is bumped after every sync
+  const [metrics, series, heatmap, topRepos, events, languages] = await cachedForUser(
+    user.id,
+    `overview:${range}:${heatmapPeriod}:${tz}:${prefs.defaultRepoScope}`,
+    () =>
+      Promise.all([
+        getOverviewMetrics(user.id, { range, tz }),
+        getActivitySeries(user.id, { range, tz }),
+        getHeatmap(user.id, { period: heatmapPeriod, tz }),
+        getTopRepositories(user.id, { range, tz, limit: 6 }),
+        getEvents(user.id, { limit: 8 }),
+        getLanguageBreakdown(user.id, { scope: prefs.defaultRepoScope }),
+      ]),
+  );
 
   const github = user.github;
   const compare = `vs previous ${metrics.label}`;
