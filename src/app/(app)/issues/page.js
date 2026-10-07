@@ -87,7 +87,7 @@ export default async function IssuesPage({ searchParams }) {
               <Table label="Issues">
                 <thead>
                   <tr>
-                    <Th>Repository</Th>
+                    <Th className="hidden sm:table-cell">Repository</Th>
                     <Th>Title</Th>
                     <Th>Status</Th>
                     <Th align="right">Opened</Th>
@@ -98,10 +98,11 @@ export default async function IssuesPage({ searchParams }) {
                 <tbody>
                   {issues.rows.map((issue) => (
                     <tr key={issue.id} className="hover:bg-surface-2/60">
-                      <Td className="whitespace-nowrap text-xs">
+                      <Td className="hidden whitespace-nowrap text-xs sm:table-cell">
                         <Link href={`/repositories/${issue.repository.id}`} className="text-fg-2 hover:text-fg hover:underline">{issue.repository.fullName}</Link>
                       </Td>
-                      <Td className="min-w-72">
+                      <Td className="min-w-64 sm:min-w-72">
+                        <span className="mb-0.5 block text-2xs text-fg-3 sm:hidden">{issue.repository.fullName}</span>
                         <span className="break-words">{issue.title}</span> <span className="tabular text-xs text-fg-3">#{issue.number}</span>
                         {issue.labels.length > 0 && (
                           <div className="mt-1 flex flex-wrap gap-1">

@@ -83,7 +83,7 @@ export default async function CommitsPage({ searchParams }) {
               <Table label="Commits">
                 <thead>
                   <tr>
-                    <Th>Repository</Th>
+                    <Th className="hidden sm:table-cell">Repository</Th>
                     <Th>Commit message</Th>
                     <Th>Author</Th>
                     <Th align="right">Date</Th>
@@ -93,10 +93,11 @@ export default async function CommitsPage({ searchParams }) {
                 <tbody>
                   {commits.rows.map((c) => (
                     <tr key={c.id} className="hover:bg-surface-2/60">
-                      <Td className="whitespace-nowrap text-xs">
+                      <Td className="hidden whitespace-nowrap text-xs sm:table-cell">
                         <Link href={`/repositories/${c.repository.id}`} className="text-fg-2 hover:text-fg hover:underline">{c.repository.fullName}</Link>
                       </Td>
-                      <Td className="min-w-72">
+                      <Td className="min-w-64 sm:min-w-72">
+                        <span className="mb-0.5 block text-2xs text-fg-3 sm:hidden">{c.repository.fullName}</span>
                         <span className="break-words" title={c.message}>{firstLine(c.message)}</span>
                         <span className="ml-2 font-mono text-2xs text-fg-3">{c.sha.slice(0, 7)}</span>
                       </Td>

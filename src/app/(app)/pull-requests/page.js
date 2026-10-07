@@ -88,7 +88,7 @@ export default async function PullRequestsPage({ searchParams }) {
               <Table label="Pull requests">
                 <thead>
                   <tr>
-                    <Th>Repository</Th>
+                    <Th className="hidden sm:table-cell">Repository</Th>
                     <Th>Title</Th>
                     <Th>Status</Th>
                     <Th>Author</Th>
@@ -100,10 +100,11 @@ export default async function PullRequestsPage({ searchParams }) {
                 <tbody>
                   {prs.rows.map((pr) => (
                     <tr key={pr.id} className="hover:bg-surface-2/60">
-                      <Td className="whitespace-nowrap text-xs">
+                      <Td className="hidden whitespace-nowrap text-xs sm:table-cell">
                         <Link href={`/repositories/${pr.repository.id}`} className="text-fg-2 hover:text-fg hover:underline">{pr.repository.fullName}</Link>
                       </Td>
-                      <Td className="min-w-72">
+                      <Td className="min-w-64 sm:min-w-72">
+                        <span className="mb-0.5 block text-2xs text-fg-3 sm:hidden">{pr.repository.fullName}</span>
                         <span className="break-words">{pr.title}</span> <span className="tabular text-xs text-fg-3">#{pr.number}</span>
                         {pr.headRef && <div className="mt-0.5 font-mono text-2xs text-fg-3">{pr.headRef} → {pr.baseRef}</div>}
                       </Td>
