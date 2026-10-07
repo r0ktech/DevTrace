@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Activity, FolderGit2, Lightbulb } from "lucide-react";
 import { getCurrentUser } from "@/server/auth/session";
 import { demoEnabled } from "@/server/auth/demo";
+import { githubConfigured } from "@/server/auth/options";
 import { generateDemoData } from "@/server/demo/seed";
 import { addDaysKey, bucketKeys, dateToKey, fillSeries, startOfWeekKey } from "@/lib/dates";
 import { formatNumber } from "@/lib/format";
@@ -60,6 +61,7 @@ function buildPreview(now) {
 export default async function LandingPage() {
   const user = await getCurrentUser();
   const showDemo = demoEnabled();
+  const configured = githubConfigured();
   const preview = buildPreview(new Date());
 
   return (
@@ -78,7 +80,7 @@ export default async function LandingPage() {
                   <Button type="submit" variant="ghost" size="md">Explore demo</Button>
                 </form>
               )}
-              <ConnectGitHubButton size="md" label="Sign in" variant="secondary" />
+              <ConnectGitHubButton size="md" label="Sign in" variant="secondary" configured={configured} />
             </>
           )}
         </nav>
@@ -97,7 +99,7 @@ export default async function LandingPage() {
                   <Link href="/dashboard">Open dashboard</Link>
                 </Button>
               ) : (
-                <ConnectGitHubButton />
+                <ConnectGitHubButton configured={configured} />
               )}
               {showDemo && !user && (
                 <form action="/api/demo" method="post">
@@ -105,6 +107,13 @@ export default async function LandingPage() {
                 </form>
               )}
             </div>
+            {!configured && !user && (
+              <p role="status" className="mt-4 max-w-xl rounded-md border border-warning/40 px-3 py-2 text-sm text-warning">
+                GitHub sign-in isn&apos;t configured on this server yet. Set <code className="font-mono text-xs">GITHUB_CLIENT_ID</code> and{" "}
+                <code className="font-mono text-xs">GITHUB_CLIENT_SECRET</code> in <code className="font-mono text-xs">.env</code>, then restart the server.
+                {showDemo ? " The demo works without it." : ""}
+              </p>
+            )}
             <p className="mt-4 text-xs text-fg-3">
               Read-only analysis of your repositories, commits, pull requests and issues. Your GitHub token is encrypted and never sent to the browser.
             </p>
@@ -169,7 +178,7 @@ export default async function LandingPage() {
                 <Link href="/dashboard">Open dashboard</Link>
               </Button>
             ) : (
-              <ConnectGitHubButton />
+              <ConnectGitHubButton configured={configured} />
             )}
           </div>
         </section>

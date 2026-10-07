@@ -9,6 +9,11 @@ import { DEMO_USER_ID } from "../demo/seed.js";
 // Set GITHUB_OAUTH_SCOPE="read:user user:email" to sync public data only.
 export const GITHUB_SCOPE = process.env.GITHUB_OAUTH_SCOPE || "read:user user:email repo";
 
+/** True when the GitHub OAuth app credentials are present. */
+export function githubConfigured() {
+  return Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
+}
+
 function encryptAccountTokens(account) {
   return {
     ...account,

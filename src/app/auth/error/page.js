@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { ConnectGitHubButton } from "@/components/app/connect-github-button";
+import { githubConfigured } from "@/server/auth/options";
 
 export const metadata = { title: "Sign-in problem" };
 
@@ -44,16 +45,29 @@ const FALLBACK = {
 
 export default async function AuthErrorPage({ searchParams }) {
   const { error } = await searchParams;
-  const message = MESSAGES[error] || FALLBACK;
+  const configured = githubConfigured();
+  // Missing credentials is the most common setup problem; say so precisely
+  const message = !configured
+    ? {
+        title: "GitHub sign-in isn't configured",
+        body: "This server has no GitHub OAuth app credentials. Create an OAuth app at github.com/settings/developers with the callback URL below, set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET in .env, and restart the server.",
+      }
+    : MESSAGES[error] || FALLBACK;
+  const callbackUrl = `${process.env.NEXTAUTH_URL || "http://localhost:3000"}/api/auth/callback/github`;
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-4">
       <div className="w-full max-w-md">
         <Logo className="mb-10" />
         <h1 className="text-xl font-semibold tracking-tight">{message.title}</h1>
         <p className="mt-2 text-sm text-fg-2">{message.body}</p>
+        {(!configured || error === "OAuthCallback" || error === "OAuthSignin") && (
+          <p className="mt-3 text-xs text-fg-3">
+            Callback URL: <code className="break-all font-mono text-fg-2">{callbackUrl}</code>
+          </p>
+        )}
         {error && <p className="mt-2 font-mono text-2xs text-fg-3">Error code: {String(error).slice(0, 40)}</p>}
         <div className="mt-8 flex gap-2">
-          <ConnectGitHubButton size="md" label="Try again" />
+          <ConnectGitHubButton size="md" label="Try again" configured={configured} />
           <Button asChild variant="ghost">
             <Link href="/">Back to home</Link>
           </Button>
